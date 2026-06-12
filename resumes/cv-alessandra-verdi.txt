@@ -1,0 +1,28 @@
+### INFORMAZIONI PERSONALI
+Nome e Cognome: Alessandra Verdi
+Ruolo: Senior Cloud & DevOps Engineer
+Contatti: Corso Vittorio 45, Torino | Tel: +39 347 111 2222 | Email: alessandra.verdi@cloudmail.net
+
+### PROFILO PROFESSIONALE
+Ingegnere DevOps con oltre 8 anni di esperienza nella progettazione di infrastrutture Cloud affidabili e scalabili. Specializzata nell'automazione dei processi di deployment (CI/CD) e nella gestione di cluster Kubernetes in ambienti aziendali complessi.
+
+### ESPERIENZA PROFESSIONALE
+CLOUD ARCHITECT | Enterprise Cloud Solutions | 2021 - Presente
+- Migrazione di un'intera infrastruttura monolitica bancaria su AWS, riducendo i costi del 30%.
+- Progettazione e manutenzione di pipeline CI/CD tramite GitHub Actions e GitLab.
+- Orchestrazione di microservizi mediante Kubernetes (EKS) con oltre 50 nodi attivi.
+
+DEVOPS ENGINEER | TechStart Hub | 2018 - 2021
+- Automazione del provisioning dell'infrastruttura tramite Terraform (IaC).
+- Monitoraggio della sicurezza e delle performance dei sistemi tramite Prometheus e Grafana.
+- Gestione di database relazionali in alta affidabilità su Google Cloud Platform.
+
+### COMPETENZE
+- Cloud Provider: AWS, Google Cloud (GCP)
+- Strumenti DevOps: Docker, Kubernetes, Terraform, Ansible
+- CI/CD: Jenkins, GitHub Actions
+- Monitoraggio: Prometheus, Grafana, ELK Stack
+
+### FORMAZIONE
+- Laurea Magistrale in Ingegneria Informatica | Politecnico di Torino | 2017
+- Certificazione AWS Certified Solutions Architect - Professional
