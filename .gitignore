@@ -10,3 +10,4 @@ data/
 # Eventuali file di configurazione personali o log
 *.log
 .env
+
