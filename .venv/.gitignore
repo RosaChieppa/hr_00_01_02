@@ -1,0 +1,12 @@
+# Ambiente virtuale Python
+.venv/
+__pycache__/
+*.pyc
+
+# Database locale ChromaDB e dati temporanei
+data/
+.chainlit/
+
+# Eventuali file di configurazione personali o log
+*.log
+.env
