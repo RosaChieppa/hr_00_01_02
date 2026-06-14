@@ -25,9 +25,12 @@ class GestoreDatabaseVettoriale:
 
         # Inizializzazione del client persistente su disco
         self.client_locale = chromadb.PersistentClient(path=ImpostazioniSistema.PERCORSO_PERSISTENZA_DB)
+        
+        # NUOVA INTEGRAZIONE (TIP): Forziamo lo spazio metrico sulla distanza coseno per vincolare i valori tra 0 e 1
         self.collezione_dati = self.client_locale.get_or_create_collection(
             name=ImpostazioniSistema.NOME_COLLEZIONE, 
-            embedding_function=self.funzione_embedding
+            embedding_function=self.funzione_embedding,
+            metadata={"hnsw:space": "cosine"}
         )
 
     def inserisci_documentazione(self, testi_cv, metadati_file, codici_id):
@@ -41,7 +44,6 @@ class GestoreDatabaseVettoriale:
 
     def effettua_ricerca_semantica(self, testo_ricerca, numero_risultati=1):
         """Interroga la collezione per similarità semantica rispetto alla query utente."""
-        # CORRETTO: Sostituito il vecchio 'numero_results' con l'argomento corretto 'numero_risultati'
         return self.collezione_dati.query(query_texts=[testo_ricerca], n_results=numero_risultati)
 
     def ottieni_file_tracciati(self):
@@ -68,3 +70,22 @@ class GestoreDatabaseVettoriale:
         if risultato and risultato.get("ids"):
             self.collezione_dati.delete(ids=risultato["ids"])
             print(f"🗑️ Rimossi correttamente tutti i segmenti per il file: {sorgente}")
+
+    # --- NUOVA INTEGRAZIONE: METODO PER LE STATISTICHE ---
+    def ottieni_statistiche(self):
+        """Estrae i metadati della collezione e calcola i file reali elaborati escludendo i duplicati."""
+        risultato = self.collezione_dati.get()
+        
+        if risultato and risultato.get("metadatas"):
+            # TIP: Uso di un set comprehension per eliminare automaticamente i duplicati delle sorgenti
+            valori_distinti = set(d["source"] for d in risultato["metadatas"] if d and "source" in d)
+            numero_files = len(valori_distinti)
+        else:
+            numero_files = 0
+
+        return f"""
+            Nome Collezione: {self.collezione_dati.name}
+            Numero totale Frammenti indicizzati: {self.collezione_dati.count()}
+            Numero File unici elaborati: {numero_files}
+        """
+    # --- FINE NUOVA INTEGRAZIONE ---

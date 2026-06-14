@@ -97,15 +97,12 @@ class ElaboratoreDocumentiHR:
 
         return len(file_da_aggiungere), len(file_da_aggiornare), len(file_da_rimuovere)
 
+    # NUOVA INTEGRAZIONE: Metodo read_first_lines ottimizzato con zip e allineato con lo stile attuale
     @staticmethod
     def ottieni_intestazione_cv(percorso_reale, limite_righe=10):
-        """Estrae le prime righe del file per consentire l'identificazione del candidato."""
-        righe_lette = []
+        """Estrae le prime righe del file usando zip per massimizzare le prestazioni ed evitare overload di memoria."""
         if os.path.exists(percorso_reale):
             with open(percorso_reale, 'r', encoding='utf-8') as f:
-                for contatore, riga in enumerate(f):
-                    if contatore < limite_righe:
-                        righe_lette.append(riga.strip())
-                    else:
-                        break
-        return " ".join(righe_lette)
+                righe_lette = [line.strip() for line, _ in zip(f, range(limite_righe))]
+                return " ".join(righe_lette)
+        return ""

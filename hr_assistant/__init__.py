@@ -16,6 +16,47 @@ from hr_assistant.utils import AssistenteModelloLinguistico
 # Dichiariamo la variabile globale per il database
 istanza_db = None
 
+
+# --- GESTIONE DELLE AZIONI INTERATTIVE (CALLBACKS) ---
+
+@cl.action_callback("db_stats")
+async def gestisci_statistiche_db(action: cl.Action):
+    """Callback per recuperare e mostrare le statistiche del database tramite LLM."""
+    global istanza_db
+    if istanza_db:
+        # Chiamata al nuovo metodo integrato nel modulo database
+        info_db = istanza_db.ottieni_statistiche()
+        # Genera la risposta strutturata o formattata tramite l'LLM helper
+        risposta = await AssistenteModelloLinguistico.ottieni_statistiche_db(info_db)
+        await cl.Message(risposta).send()
+    else:
+        await cl.Message("Database non inizializzato.").send()
+
+
+@cl.action_callback("db_reindex")
+async def gestisci_reindicizzazione_db(action: cl.Action):
+    """Callback per forzare il rinfresco e la sincronizzazione manuale dei file txt."""
+    global istanza_db
+    if istanza_db:
+        aggiunti, aggiornati, rimossi = ElaboratoreDocumentiHR.sincronizza_documenti(istanza_db)
+        messaggio = (
+            f"🔄 Database reindicizzato con successo.\n"
+            f"Sincronizzazione completata: {aggiunti} aggiunti, {aggiornati} modificati, {rimossi} rimossi."
+        )
+        await cl.Message(messaggio).send()
+    else:
+        await cl.Message("Impossibile reindicizzare: database non pronto.").send()
+
+
+@cl.action_callback("say_hello")
+async def gestisci_saluto(action: cl.Action):
+    """Callback dimostrativo di saluto basato sul payload."""
+    valore_payload = action.payload.get("value", "utente")
+    await cl.Message(f"Ciao {valore_payload}! Come posso aiutarti oggi?").send()
+
+
+# --- CONFIGURAZIONE LOGICHE DI CHAT ---
+
 @cl.on_chat_start
 async def inizializza_conversazione():
     """Inizializza il database vettoriale all'interno del loop asincrono e imposta la cronologia."""
@@ -28,6 +69,24 @@ async def inizializza_conversazione():
         # Sincronizzazione atomica bidirezionale locale -> DB vettoriale
         aggiunti, aggiornati, rimossi = ElaboratoreDocumentiHR.sincronizza_documenti(istanza_db)
         print(f"Sincronizzazione completata: {aggiunti} aggiunti, {aggiornati} modificati, {rimossi} rimossi.")
+
+    # Aggiunta dei pulsanti di azione interattivi visibili in cima alla chat
+    azioni_disponibili = [
+        cl.Action(
+            name="db_stats",
+            icon="mouse-pointer-click",
+            payload={"value": "db_stats"},
+            label="📊 Statistiche Database",
+        ),
+        cl.Action(
+            name="db_reindex",
+            icon="mouse-pointer-click",
+            payload={"value": "db_reindex"},
+            label="🔄 Reindex Database",
+        )
+    ]
+
+    await cl.Message(content="📋 Informazioni e utilità del sistema HR:", actions=azioni_disponibili).send()
 
     messaggio_sistema = {
         "role": "system",
@@ -50,39 +109,48 @@ async def gestisci_richiesta_chat(message: cl.Message):
         return
 
     try:
-        # Esecuzione della ricerca semantica sulla collezione ChromaDB locale
-        risultati_ricerca = istanza_db.effettua_ricerca_semantica(quesito_utente)
+        # Esecuzione della ricerca semantica sulla collezione ChromaDB locale (recuperando fino a 3 frammenti significativi)
+        risultati_ricerca = istanza_db.effettua_ricerca_semantica(quesito_utente, numero_risultati=3)
 
-        # Verifica di sicurezza: blocca l'esecuzione se il database non ha prodotto risultati
-        if not risultati_ricerca or not risultati_ricerca.get("documents") or not risultati_ricerca["documents"][0]:
+        # Verifica di sicurezza: blocca l'esecuzione se il database non ha prodotto risultati pertinenti
+        if not risultati_ricerca or not risultati_ricerca.get("documents") or not risultati_ricerca["documents"] or not risultati_ricerca["documents"][0]:
             await cl.Message(content="Mi dispiace, non ho trovato informazioni pertinenti nei curricula archiviati.").send()
             return
 
-        # Estrazione sicura usando i doppi indici per le liste annidate di ChromaDB
+        # Estrazione sicura usando i doppi indici per le liste annidate restituite da ChromaDB
         file_selezionato = risultati_ricerca["metadatas"][0][0]["source"]
         testo_estratto_rilevante = risultati_ricerca["documents"][0][0]
 
-        # Ricostruzione del blocco di contesto per l'LLM locale
-        contesto_documentale = f"CONTESTO APPLICATIVO: nome file sorgente {file_selezionato} | estratto del profilo: {testo_estratto_rilevante}"
+        # Estrazione delle prime 10 righe del file sorgente per recuperare l'anagrafica iniziale
+        percorso_completo_file = os.path.join(ImpostazioniSistema.CARTELLA_CURRICULA, file_selezionato)
+        informazioni_anagrafiche = ElaboratoreDocumentiHR.ottieni_intestazione_cv(percorso_completo_file, limite_righe=10)
 
-        # Ottimizzazione: Passiamo direttamente il nome del file come riferimento all'ingegneria del prompt
+        # Ricostruzione strutturata del blocco di contesto completo per l'LLM
+        contesto_documentale = (
+            f"CONTESTO APPLICATIVO: nome file sorgente {file_selezionato} | "
+            f"estratto del profilo significativo: {testo_estratto_rilevante} | "
+            f"informazioni generali del candidato: {informazioni_anagrafiche}"
+        )
+
+        # Generazione del prompt ingegnerizzato
         prompt_ingegnerizzato = AssistenteModelloLinguistico.genera_prompt_strutturato(
             contesto_documentale, quesito_utente, file_selezionato
         )
 
-        # Recupero della cronologia della sessione corrente
+        # Recupero e aggiornamento dello storico della conversazione corrente
         storico_chat = cl.user_session.get("cronologia_messaggi", [])
         storico_chat.append({"role": "user", "content": prompt_ingegnerizzato})
 
-        # Inizializzazione del contenitore per lo streaming dell'output su Chainlit
+        # Inizializzazione del contenitore per lo streaming di testo sulla GUI di Chainlit
         messaggio_risposta_interattiva = cl.Message(content="")
         await messaggio_risposta_interattiva.send()
 
-        # Chiamata asincrona nativa e streaming dei token
+        # Chiamata asincrona nativa e streaming dei token progressivi
         async for token in AssistenteModelloLinguistico.esegui_flusso_chat(storico_chat):
             if token:
                 await messaggio_risposta_interattiva.stream_token(str(token))
 
+        # Salvataggio del messaggio finale dell'assistente nella cronologia di sessione
         storico_chat.append({"role": "assistant", "content": messaggio_risposta_interattiva.content})
         await messaggio_risposta_interattiva.update()
         cl.user_session.set("cronologia_messaggi", storico_chat)

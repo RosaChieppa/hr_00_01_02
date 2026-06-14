@@ -41,18 +41,44 @@ class AssistenteModelloLinguistico:
         
         return risposta_modello['message']['content'].strip()
 
+    # --- NUOVA INTEGRAZIONE: GENERAZIONE DELLE STATISTICHE DB TRAMITE LLM ---
+    @staticmethod
+    async def ottieni_statistiche_db(informazioni_db):
+        """Descrive in modo testuale e sintetico le statistiche legate al database vettoriale locale."""
+        prompt_statistiche = f"""
+        Il tuo compito è quello di descrivere in modo testuale, ma sintetico, le statistiche legate al database dei frammenti indicizzati da questo sistema. 
+        Dammi pure la percentuale di frammenti indicizzati rispetto al totale dei file presenti nel database. 
+        Ecco le informazioni necessarie per le statistiche da fornire: {informazioni_db}
+        """
+        
+        risposta_modello = await client_ollama_locale.chat(
+            model=ImpostazioniSistema.MODELLO_CHAT,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt_statistiche,
+                }
+            ]
+        )
+        
+        return risposta_modello['message']['content'].strip()
+    # --- FINE NUOVA INTEGRAZIONE ---
+
     @staticmethod
     def genera_prompt_strutturato(testo_contesto, quesito_utente, nome_candidato):
         """Sviluppa il prompt finale inserendo i vincoli di risposta per il modello locale."""
+        # INTEGRAZIONE LOGICA SORGENTE: Aggiornati i vincoli sul posizionamento del nome del file e la sezione contatti
         return f"""
-            Scenario documentale di riferimento:
+            Dato il seguente contesto:
             [[[
             {testo_contesto}
             ]]].
-            Richiesta formulata dall'utente: [[[ {quesito_utente} ]]] .
-            Linee guidelines tassative per la generazione della risposta:
-            1. Specifica chiaramente che nel file identificato risiede il profilo professionale ottimale.
-            2. Ricordati di esplicitare chiaramente il nome del file all'interno della risposta.
-            3. Assicurati di includere espressamente il nome del candidato: [[[ {nome_candidato} ]]].
-            4. Sviluppa un'argomentazione solida basando le tue motivazioni solo sulle competenze estratte dal contesto sopra riportato.
-            5. Qualora non si riscontrasse alcuna affinità semantica o informazione utile nei documenti, dichiara l'impossibilità di rispondere senza inventare dati non presenti."""
+            Rispondi alla domanda dell'utente: [[[ {quesito_utente} ]]].
+            
+            Linee guida tassative per la generazione della risposta:
+            1. Spiega in modo chiaro che nel file individuato c'è il profilo più adatto alle richieste dell'utente.
+            2. Argomenta la scelta in modo solido utilizzando esclusivamente il contenuto del testo individuato nel contesto sopra riportato.
+            3. Qualora non si riscontrasse alcuna affinità semantica o informazione utile nei documenti, dichiara l'impossibilità di rispondere senza inventare dati.
+            4. Alla fine della risposta, crea una sezione dedicata esplicitamente ai contatti del candidato indicando il nome ([[[ {nome_candidato} ]]]), la sua email e il numero di telefono.
+            5. Subito dopo la sezione dei contatti indica il Nome del file del CV di origine. Non menzionare o nominare mai il nome del file prima di questa specifica sezione conclusiva.
+        """
