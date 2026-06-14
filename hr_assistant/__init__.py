@@ -1,13 +1,11 @@
 # __init__.py
 import os
+import sys
 import asyncio
 
-# PATCH CRITICA PER PYTHON 3.14: Forziamo la creazione del loop asincrono prima del server
-try:
-    asyncio.get_running_loop()
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+# Configurazione del loop asincrono ottimale per ambienti Windows con Python 3.12
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import chainlit as cl
 from hr_assistant.document_processor import ElaboratoreDocumentiHR
@@ -24,10 +22,12 @@ async def inizializza_conversazione():
     global istanza_db
     
     if istanza_db is None:
-        print("🔍 Controllo e indicizzazione dei curricula...")
-        testi_cv, metadati_file, codici_id = ElaboratoreDocumentiHR.elabora_e_segmenta_file()
+        print("🔍 Controllo e sincronizzazione avanzata dei curricula...")
         istanza_db = GestoreDatabaseVettoriale()
-        istanza_db.inserisci_documentazione(testi_cv, metadati_file, codici_id)
+        
+        # Sincronizzazione atomica bidirezionale locale -> DB vettoriale
+        aggiunti, aggiornati, rimossi = ElaboratoreDocumentiHR.sincronizza_documenti(istanza_db)
+        print(f"Sincronizzazione completata: {aggiunti} aggiunti, {aggiornati} modificati, {rimossi} rimossi.")
 
     messaggio_sistema = {
         "role": "system",
@@ -58,23 +58,16 @@ async def gestisci_richiesta_chat(message: cl.Message):
             await cl.Message(content="Mi dispiace, non ho trovato informazioni pertinenti nei curricula archiviati.").send()
             return
 
-        # RISOLUZIONE DEL BLOCCO: Estrazione sicura usando i doppi indici per le liste annidate di ChromaDB
+        # Estrazione sicura usando i doppi indici per le liste annidate di ChromaDB
         file_selezionato = risultati_ricerca["metadatas"][0][0]["source"]
         testo_estratto_rilevante = risultati_ricerca["documents"][0][0]
-
-        # Recupero delle linee iniziali del file per l'anagrafica
-        percorso_file_origine = os.path.join(ImpostazioniSistema.CARTELLA_CURRICULA, file_selezionato)
-        righe_anagrafica = ElaboratoreDocumentiHR.ottieni_intestazione_cv(percorso_file_origine, 10)
 
         # Ricostruzione del blocco di contesto per l'LLM locale
         contesto_documentale = f"CONTESTO APPLICATIVO: nome file sorgente {file_selezionato} | estratto del profilo: {testo_estratto_rilevante}"
 
-        # Identificazione asincrona del nome tramite LLM
-        nome_candidato = await AssistenteModelloLinguistico.estrai_nominativo_candidato(righe_anagrafica)
-
-        # Generazione del prompt finale arricchito con vincoli e contesto
+        # Ottimizzazione: Passiamo direttamente il nome del file come riferimento all'ingegneria del prompt
         prompt_ingegnerizzato = AssistenteModelloLinguistico.genera_prompt_strutturato(
-            contesto_documentale, quesito_utente, nome_candidato
+            contesto_documentale, quesito_utente, file_selezionato
         )
 
         # Recupero della cronologia della sessione corrente

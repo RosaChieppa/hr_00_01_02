@@ -32,14 +32,39 @@ class GestoreDatabaseVettoriale:
 
     def inserisci_documentazione(self, testi_cv, metadati_file, codici_id):
         """Aggiunge i segmenti dei curricula estratti nella collezione vettoriale."""
-        if self.collezione_dati.count() == 0:
-            print("💾 Popolamento del database vettoriale locale in corso...")
+        if testi_cv:
+            print("💾 Popolamento o aggiornamento del database vettoriale locale in corso...")
             self.collezione_dati.add(documents=testi_cv, metadatas=metadati_file, ids=codici_id)
-            print(f"✅ Inseriti correttamente {self.collezione_dati.count()} elementi!")
+            print(f"✅ Operazione completata! Elementi totali nella collezione: {self.collezione_dati.count()}")
         else:
-            print(f"📦 Il database contiene già {self.collezione_dati.count()} elementi. Salto l'inserimento.")
+            print("📦 Nessun nuovo elemento da inserire.")
 
     def effettua_ricerca_semantica(self, testo_ricerca, numero_risultati=1):
         """Interroga la collezione per similarità semantica rispetto alla query utente."""
-        # CORREZIONE APPLICATA: Sostituito numero_results con numero_risultati
+        # CORRETTO: Sostituito il vecchio 'numero_results' con l'argomento corretto 'numero_risultati'
         return self.collezione_dati.query(query_texts=[testo_ricerca], n_results=numero_risultati)
+
+    def ottieni_file_tracciati(self):
+        """Recupera tutti i file univoci e i loro metadati dal database vettoriale."""
+        risultato = self.collezione_dati.get()
+        file_tracciati = {}
+
+        if risultato and risultato.get("metadatas"):
+            for metadato in risultato["metadatas"]:
+                if metadato and "source" in metadato:
+                    sorgente = metadato["source"]
+                    if sorgente not in file_tracciati:
+                        file_tracciati[sorgente] = {
+                            "hash": metadato.get("hash"),
+                            "last_modified": metadato.get("last_modified"),
+                            "source": sorgente,
+                        }
+
+        return file_tracciati
+
+    def rimuovi_documento_per_sorgente(self, sorgente):
+        """Rimuove tutte le voci del database associate a uno specifico file sorgente."""
+        risultato = self.collezione_dati.get(where={"source": sorgente})
+        if risultato and risultato.get("ids"):
+            self.collezione_dati.delete(ids=risultato["ids"])
+            print(f"🗑️ Rimossi correttamente tutti i segmenti per il file: {sorgente}")
