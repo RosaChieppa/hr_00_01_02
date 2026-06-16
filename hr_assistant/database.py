@@ -1,32 +1,18 @@
 # database.py
 import chromadb
-from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
-from ollama import Client
 from hr_assistant.config import ImpostazioniSistema
-
-# Creiamo una funzione di embedding personalizzata usando il client ufficiale Ollama
-class FunzioneEmbeddingOllamaPersonalizzata(EmbeddingFunction):
-    def __init__(self):
-        self.client_ollama = Client(host=ImpostazioniSistema.URL_ENDPOINT_API)
-        self.modello = ImpostazioniSistema.MODELLO_VETTORIALE
-
-    def __call__(self, input: Documents) -> Embeddings:
-        lista_vettori = []
-        for testo in input:
-            risposta = self.client_ollama.embeddings(model=self.modello, prompt=testo)
-            lista_vettori.append(risposta["embedding"])
-        return lista_vettori
-
+# Importiamo la funzione di embedding dal file custom_embedding
+from hr_assistant.custom_embedding import CustomEmbeddingFunction
 
 class GestoreDatabaseVettoriale:
     def __init__(self):
-        # Usiamo la nostra funzione personalizzata infallibile
-        self.funzione_embedding = FunzioneEmbeddingOllamaPersonalizzata()
+        # Inizializza la funzione di embedding personalizzata importata dal file esterno
+        self.funzione_embedding = CustomEmbeddingFunction()
 
         # Inizializzazione del client persistente su disco
         self.client_locale = chromadb.PersistentClient(path=ImpostazioniSistema.PERCORSO_PERSISTENZA_DB)
         
-        # NUOVA INTEGRAZIONE (TIP): Forziamo lo spazio metrico sulla distanza coseno per vincolare i valori tra 0 e 1
+        # Forziamo lo spazio metrico sulla distanza coseno per vincolare i valori tra 0 e 1
         self.collezione_dati = self.client_locale.get_or_create_collection(
             name=ImpostazioniSistema.NOME_COLLEZIONE, 
             embedding_function=self.funzione_embedding,
@@ -71,13 +57,11 @@ class GestoreDatabaseVettoriale:
             self.collezione_dati.delete(ids=risultato["ids"])
             print(f"🗑️ Rimossi correttamente tutti i segmenti per il file: {sorgente}")
 
-    # --- NUOVA INTEGRAZIONE: METODO PER LE STATISTICHE ---
     def ottieni_statistiche(self):
         """Estrae i metadati della collezione e calcola i file reali elaborati escludendo i duplicati."""
         risultato = self.collezione_dati.get()
         
         if risultato and risultato.get("metadatas"):
-            # TIP: Uso di un set comprehension per eliminare automaticamente i duplicati delle sorgenti
             valori_distinti = set(d["source"] for d in risultato["metadatas"] if d and "source" in d)
             numero_files = len(valori_distinti)
         else:
@@ -88,4 +72,3 @@ class GestoreDatabaseVettoriale:
             Numero totale Frammenti indicizzati: {self.collezione_dati.count()}
             Numero File unici elaborati: {numero_files}
         """
-    # --- FINE NUOVA INTEGRAZIONE ---

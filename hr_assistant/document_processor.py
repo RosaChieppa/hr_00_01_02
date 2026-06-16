@@ -3,8 +3,12 @@ import os
 import uuid
 import hashlib
 from hr_assistant.config import ImpostazioniSistema
+from hr_assistant.semantic_chunking import SemanticChunking
 
 class ElaboratoreDocumentiHR:
+
+    # Istanziamo il chunker semantico usando il modello impostato nella configurazione
+    chunker_semantico = SemanticChunking(model_name=ImpostazioniSistema.MODELLO_VETTORIALE)
 
     @staticmethod
     def ottieni_hash_file(percorso_file):
@@ -26,7 +30,7 @@ class ElaboratoreDocumentiHR:
 
     @staticmethod
     def elabora_e_segmenta_singolo_file(percorso_file):
-        """Processa un singolo documento dividendolo in blocchi standard usando il separatore."""
+        """Processa un singolo documento dividendolo in blocchi tramite Semantic Chunking con Ollama."""
         elenco_testi = []
         elenco_metadati = []
         elenco_id = []
@@ -34,17 +38,19 @@ class ElaboratoreDocumentiHR:
         with open(percorso_file, 'r', encoding='utf-8') as flusso_file:
             testo_completo = flusso_file.read()
             
-            # Suddivisione logica dei frammenti sostituendo i ritorni a capo per stabilità dell'LLM
-            testo_normalizzato = testo_completo.replace("\n", ".")
-            frammenti_grezzi = testo_normalizzato.split('### ')
+            # Genera i metadati del file sorgente
             metadati_file = ElaboratoreDocumentiHR.ottieni_metadati_documento(percorso_file)
 
-            for contatore, frammento in enumerate(frammenti_grezzi):
+            # Esegue lo chunking semantico sfruttando Ollama
+            frammenti_semantici = ElaboratoreDocumentiHR.chunker_semantico.create_chunks(
+                text=testo_completo, 
+                buffer_size=1, 
+                percentile_threshold=90
+            )
+
+            for frammento in frammenti_semantici:
                 testo_pulito = frammento.strip()
                 if testo_pulito:
-                    if contatore > 0 or testo_completo.startswith('### '):
-                        testo_pulito = f"### {testo_pulito}"
-                        
                     elenco_testi.append(testo_pulito)
                     elenco_metadati.append(metadati_file)
                     elenco_id.append(f"rec_{uuid.uuid4()}")
@@ -82,7 +88,6 @@ class ElaboratoreDocumentiHR:
         for azione, file_selezionati in [("add", file_da_aggiungere), ("update", file_da_aggiornare)]:
             for nome_file in file_selezionati:
                 percorso_file = os.path.join(ImpostazioniSistema.CARTELLA_CURRICULA, nome_file)
-                # Chiamata corretta al metodo statico interno
                 testi, metadati, ids = ElaboratoreDocumentiHR.elabora_e_segmenta_singolo_file(percorso_file)
 
                 if azione == "update":
@@ -97,10 +102,9 @@ class ElaboratoreDocumentiHR:
 
         return len(file_da_aggiungere), len(file_da_aggiornare), len(file_da_rimuovere)
 
-    # NUOVA INTEGRAZIONE: Metodo read_first_lines ottimizzato con zip e allineato con lo stile attuale
     @staticmethod
     def ottieni_intestazione_cv(percorso_reale, limite_righe=10):
-        """Estrae le prime righe del file usando zip per massimizzare le prestazioni ed evitare overload di memoria."""
+        """Estrae le prime righe del file usando zip per massimizzare le prestazioni."""
         if os.path.exists(percorso_reale):
             with open(percorso_reale, 'r', encoding='utf-8') as f:
                 righe_lette = [line.strip() for line, _ in zip(f, range(limite_righe))]

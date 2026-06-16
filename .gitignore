@@ -1,13 +1,5 @@
-# Ambiente virtuale Python
-.venv/
+modelli/
+data/chromadb_locale/
 __pycache__/
-*.pyc
-
-# Database locale ChromaDB e dati temporanei
-data/
-.chainlit/
-
-# Eventuali file di configurazione personali o log
-*.log
-.env
-
+.venv/
+venv/

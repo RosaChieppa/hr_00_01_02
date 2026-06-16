@@ -1,9 +1,9 @@
-# __init__.py
+# app.py (dentro la cartella hr_assistant)
 import os
 import sys
 import asyncio
 
-# Configurazione del loop asincrono ottimale per ambienti Windows con Python 3.12
+# Configurazione del loop asincrono ottimale per ambienti Windows con Python 3.12+
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -24,7 +24,7 @@ async def gestisci_statistiche_db(action: cl.Action):
     """Callback per recuperare e mostrare le statistiche del database tramite LLM."""
     global istanza_db
     if istanza_db:
-        # Chiamata al nuovo metodo integrato nel modulo database
+        # Chiamata al metodo integrato nel modulo database
         info_db = istanza_db.ottieni_statistiche()
         # Genera la risposta strutturata o formattata tramite l'LLM helper
         risposta = await AssistenteModelloLinguistico.ottieni_statistiche_db(info_db)
@@ -109,17 +109,23 @@ async def gestisci_richiesta_chat(message: cl.Message):
         return
 
     try:
-        # Esecuzione della ricerca semantica sulla collezione ChromaDB locale (recuperando fino a 3 frammenti significativi)
+        # Esecuzione della ricerca semantica sulla collezione ChromaDB locale
         risultati_ricerca = istanza_db.effettua_ricerca_semantica(quesito_utente, numero_risultati=3)
 
-        # Verifica di sicurezza: blocca l'esecuzione se il database non ha prodotto risultati pertinenti
-        if not risultati_ricerca or not risultati_ricerca.get("documents") or not risultati_ricerca["documents"] or not risultati_ricerca["documents"][0]:
+        # Verifica di sicurezza strutturale sull'output annidato di ChromaDB
+        if (not risultati_ricerca 
+                or not risultati_ricerca.get("documents") 
+                or not risultati_ricerca["documents"] 
+                or not risultati_ricerca["documents"][0]):
             await cl.Message(content="Mi dispiace, non ho trovato informazioni pertinenti nei curricula archiviati.").send()
             return
 
-        # Estrazione sicura usando i doppi indici per le liste annidate restituite da ChromaDB
+        # Estrazione corretta e sicura dalle liste di liste di ChromaDB
+        # risultati_ricerca["metadatas"][0] è la lista di dizionari associata alla nostra query
         file_selezionato = risultati_ricerca["metadatas"][0][0]["source"]
-        testo_estratto_rilevante = risultati_ricerca["documents"][0][0]
+        
+        # risultati_ricerca["documents"][0] contiene la lista dei frammenti testuali recuperati
+        testo_estratto_rilevante = " ".join(risultati_ricerca["documents"][0])
 
         # Estrazione delle prime 10 righe del file sorgente per recuperare l'anagrafica iniziale
         percorso_completo_file = os.path.join(ImpostazioniSistema.CARTELLA_CURRICULA, file_selezionato)
