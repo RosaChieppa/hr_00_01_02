@@ -1,5 +1,6 @@
-modelli/
-data/chromadb_locale/
+modelli/mio_modello_personalizzato/
+
+data/
 __pycache__/
-.venv/
-venv/
+*.pyc
+hr_assistant/__pycache__/

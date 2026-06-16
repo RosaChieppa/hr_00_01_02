@@ -1,19 +1,18 @@
-# app.py (dentro la cartella hr_assistant)
 import os
 import sys
 import asyncio
 
-# Configurazione del loop asincrono ottimale per ambienti Windows con Python 3.12+
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import chainlit as cl
-from hr_assistant.document_processor import ElaboratoreDocumentiHR
-from hr_assistant.database import GestoreDatabaseVettoriale
-from hr_assistant.config import ImpostazioniSistema
-from hr_assistant.utils import AssistenteModelloLinguistico
 
-# Dichiariamo la variabile globale per il database
+# CORREZIONE: Importazioni locali dirette senza prefisso del modulo padre
+from document_processor import ElaboratoreDocumentiHR
+from database import GestoreDatabaseVettoriale
+from config import ImpostazioniSistema
+from utils import AssistenteModelloLinguistico
+
 istanza_db = None
 
 
@@ -24,9 +23,7 @@ async def gestisci_statistiche_db(action: cl.Action):
     """Callback per recuperare e mostrare le statistiche del database tramite LLM."""
     global istanza_db
     if istanza_db:
-        # Chiamata al metodo integrato nel modulo database
         info_db = istanza_db.ottieni_statistiche()
-        # Genera la risposta strutturata o formattata tramite l'LLM helper
         risposta = await AssistenteModelloLinguistico.ottieni_statistiche_db(info_db)
         await cl.Message(risposta).send()
     else:
@@ -35,7 +32,7 @@ async def gestisci_statistiche_db(action: cl.Action):
 
 @cl.action_callback("db_reindex")
 async def gestisci_reindicizzazione_db(action: cl.Action):
-    """Callback per forzare il rinfresco e la sincronizzazione manuale dei file txt."""
+    """Callback per forzare il rinfresco e la sincronizzazione manuale di tutti i file supportati."""
     global istanza_db
     if istanza_db:
         aggiunti, aggiornati, rimossi = ElaboratoreDocumentiHR.sincronizza_documenti(istanza_db)
@@ -66,11 +63,9 @@ async def inizializza_conversazione():
         print("🔍 Controllo e sincronizzazione avanzata dei curricula...")
         istanza_db = GestoreDatabaseVettoriale()
         
-        # Sincronizzazione atomica bidirezionale locale -> DB vettoriale
         aggiunti, aggiornati, rimossi = ElaboratoreDocumentiHR.sincronizza_documenti(istanza_db)
         print(f"Sincronizzazione completata: {aggiunti} aggiunti, {aggiornati} modificati, {rimossi} rimossi.")
 
-    # Aggiunta dei pulsanti di azione interattivi visibili in cima alla chat
     azioni_disponibili = [
         cl.Action(
             name="db_stats",
@@ -109,10 +104,8 @@ async def gestisci_richiesta_chat(message: cl.Message):
         return
 
     try:
-        # Esecuzione della ricerca semantica sulla collezione ChromaDB locale
         risultati_ricerca = istanza_db.effettua_ricerca_semantica(quesito_utente, numero_risultati=3)
 
-        # Verifica di sicurezza strutturale sull'output annidato di ChromaDB
         if (not risultati_ricerca 
                 or not risultati_ricerca.get("documents") 
                 or not risultati_ricerca["documents"] 
@@ -120,43 +113,38 @@ async def gestisci_richiesta_chat(message: cl.Message):
             await cl.Message(content="Mi dispiace, non ho trovato informazioni pertinenti nei curricula archiviati.").send()
             return
 
-        # Estrazione corretta e sicura dalle liste di liste di ChromaDB
-        # risultati_ricerca["metadatas"][0] è la lista di dizionari associata alla nostra query
+        # Estrazione allineata alle liste interne di ChromaDB
         file_selezionato = risultati_ricerca["metadatas"][0][0]["source"]
-        
-        # risultati_ricerca["documents"][0] contiene la lista dei frammenti testuali recuperati
         testo_estratto_rilevante = " ".join(risultati_ricerca["documents"][0])
 
-        # Estrazione delle prime 10 righe del file sorgente per recuperare l'anagrafica iniziale
+        # --- GESTIONE SICURA DEI FILE SORGENTE (INCLUSI ZIP) ---
         percorso_completo_file = os.path.join(ImpostazioniSistema.CARTELLA_CURRICULA, file_selezionato)
-        informazioni_anagrafiche = ElaboratoreDocumentiHR.ottieni_intestazione_cv(percorso_completo_file, limite_righe=10)
+        
+        if os.path.exists(percorso_completo_file):
+            informazioni_anagrafiche = ElaboratoreDocumentiHR.ottieni_intestazione_cv(percorso_completo_file, limite_righe=10)
+        else:
+            informazioni_anagrafiche = testo_estratto_rilevante[:300] + "..."
 
-        # Ricostruzione strutturata del blocco di contesto completo per l'LLM
         contesto_documentale = (
             f"CONTESTO APPLICATIVO: nome file sorgente {file_selezionato} | "
             f"estratto del profilo significativo: {testo_estratto_rilevante} | "
             f"informazioni generali del candidato: {informazioni_anagrafiche}"
         )
 
-        # Generazione del prompt ingegnerizzato
         prompt_ingegnerizzato = AssistenteModelloLinguistico.genera_prompt_strutturato(
             contesto_documentale, quesito_utente, file_selezionato
         )
 
-        # Recupero e aggiornamento dello storico della conversazione corrente
         storico_chat = cl.user_session.get("cronologia_messaggi", [])
         storico_chat.append({"role": "user", "content": prompt_ingegnerizzato})
 
-        # Inizializzazione del contenitore per lo streaming di testo sulla GUI di Chainlit
         messaggio_risposta_interattiva = cl.Message(content="")
         await messaggio_risposta_interattiva.send()
 
-        # Chiamata asincrona nativa e streaming dei token progressivi
         async for token in AssistenteModelloLinguistico.esegui_flusso_chat(storico_chat):
             if token:
                 await messaggio_risposta_interattiva.stream_token(str(token))
 
-        # Salvataggio del messaggio finale dell'assistente nella cronologia di sessione
         storico_chat.append({"role": "assistant", "content": messaggio_risposta_interattiva.content})
         await messaggio_risposta_interattiva.update()
         cl.user_session.set("cronologia_messaggi", storico_chat)
