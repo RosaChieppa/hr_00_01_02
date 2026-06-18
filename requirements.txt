@@ -1,5 +1,0 @@
-chainlit
-chromadb
-ollama
-asyncio
-httpx
