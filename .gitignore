@@ -4,3 +4,8 @@ data/
 __pycache__/
 *.pyc
 hr_assistant/__pycache__/
+.venv/
+__pycache__/
+*.pyc
+data/
+resumes/
