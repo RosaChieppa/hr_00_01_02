@@ -1,0 +1,17 @@
+# Modelli personalizzati e Ollama
+modelli/mio_modello_personalizzato/
+*.gguf
+
+# Dati e file locali
+data/
+resumes/
+
+# Python e ambienti virtuali
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Configurazioni locali e credenziali
+.env
